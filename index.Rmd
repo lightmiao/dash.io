@@ -1,0 +1,754 @@
+---
+title: "HHS COVID-19 Awards"
+
+output: 
+  flexdashboard::flex_dashboard:
+    theme: simplex
+    navbar:
+      - { title: "back", href: "https://lightmiao.github.io/website.io/", align: right }
+---
+
+```{r setup, include=FALSE}
+library(plotly)
+library(plyr)
+library(flexdashboard)
+library(readr)
+library(dplyr)
+library(sf)
+library(leaflet)
+library(htmltools)
+library(rmapshaper)
+library(wordcloud2)  
+library(tm)
+library(RColorBrewer)
+library(extrafont)
+library(tidyverse)
+library(networkD3)
+library(htmlwidgets)
+library(webshot)
+options(warn=-1)
+
+
+
+recip1=read_csv(file = 'data/recip1.csv')
+recip2=read_csv(file = 'data/recip2.csv')
+recip=rbind(recip1,recip2)
+names(recip)
+
+recip_int0=recip[which(recip$State=="Other"),]
+
+recip_dem0=recip[which(recip$State!="Other"),]
+recip_dem0 <- recip_dem0[, which(names(recip) %in% c("Recipient Name", "City", "State","Type","Class"))]
+recip_dem0=recip_dem0[!duplicated(recip_dem0),]
+
+recip_dem0=recip_dem0 %>% 
+    group_by(`Recipient Name`,State,City) %>% 
+    summarise(Type = first(Type),Class = first(Class))
+
+recip_dem0 =recip_dem0 %>% drop_na()
+
+
+
+recip_int0 <- recip_int0[, which(names(recip_int0) %in% c("Recipient Name", "City","Country","Type","Class"))]
+recip_int0=recip_int0[!duplicated(recip_int0),]
+recip_int0=recip_int0 %>% 
+    group_by(`Recipient Name`,City,Country) %>% 
+    summarise(Type = first(Type),Class = first(Class))
+
+
+
+df=read_csv(file = 'data/hhs.csv')
+df2=df[which(is.na(df$State)==TRUE) ,]
+df2=df2[-which(df2$`Recipient Name` %in% c("REDACTED DUE TO PII")),]
+df2=df2[-which(df2$City %in% c("AMMAN")),]
+df2$Country_code_2=substring(df2$City,nchar(df2$City)-1,nchar(df2$City))
+df2$City=substring(df2$City,1,nchar(df2$City)-4)
+
+
+
+
+
+df2[which(df2$Country_code_2=="ZA"),]$Country_code_2="ZM"
+df2[which(df2$Country_code_2=="SF"),]$Country_code_2="ZA"
+df2[which(df2$Country_code_2=="UK"),]$Country_code_2="GB"
+df2[which(df2$Country_code_2=="NI"),]$Country_code_2="NG"
+df2[which(df2$Country_code_2=="WA"),]$Country_code_2="NA"
+df2[which(df2$Country_code_2=="HA"),]$Country_code_2="HT"
+df2[which(df2$Country_code_2=="BG"),]$Country_code_2="BD"
+df2[which(df2$Country_code_2=="BC"),]$Country_code_2="BW"
+df2[which(df2$Country_code_2=="BH"),]$Country_code_2="BA"
+df2[which(df2$Country_code_2=="DR"),]$Country_code_2="DO"
+df2[which(df2$Country_code_2=="ES"),]$Country_code_2="SV"
+df2[which(df2$Country_code_2=="IV"),]$Country_code_2="CI"
+df2[which(df2$Country_code_2=="LT"),]$Country_code_2="LS"
+df2[which(df2$Country_code_2=="MI"),]$Country_code_2="MW"
+df2[which(df2$Country_code_2=="MG"),]$Country_code_2="MN"
+df2[which(df2$Country_code_2=="PA"),]$Country_code_2="PY"
+df2[which(df2$Country_code_2=="RP"),]$Country_code_2="PH"
+df2[which(df2$Country_code_2=="RS"),]$Country_code_2="RU"
+df2[which(df2$Country_code_2=="SZ"),]$Country_code_2="CH"
+df2[which(df2$Country_code_2=="TD"),]$Country_code_2="TT"
+df2[which(df2$Country_code_2=="TS"),]$Country_code_2="TN"
+
+
+df2[which(df2$Country_code_2=="ZI"),]$Country_code_2="ZW"
+
+award_int=df2[, -which(names(df2) %in% c("State"))]
+
+award_dem=df[which(is.na(df$State)==FALSE) ,]
+
+dem=left_join(award_dem,recip_dem0,by=c('Recipient Name',"State","City"))
+int=left_join(award_int,recip_int0,c('Recipient Name',"City"))
+
+
+int2=int[, which(names(int) %in% c("OPDIV","Approp Code", "Recipient Name", "Action Date","Award Amount","Class","Type","Class",'Award Title'))]
+int2$GEO="International"
+dem2=dem[, which(names(dem) %in% c("OPDIV", "Approp Code","Recipient Name", "Action Date","Award Amount","Class","Type","Class","Award Title"))]
+dem2$GEO="Domestic"
+all=rbind(int2,dem2)
+
+write.csv(int, file = "data/int.csv", row.names=FALSE)
+write.csv(dem, file = "data/dem.csv", row.names=FALSE)
+write.csv(all, file = "data/all.csv", row.names=FALSE)
+
+
+
+```
+
+About
+=======================================================================
+**Overview**
+
+
+This project is about the awards given by the U.S. Department of Health and Human Services HHS to support Covid-10 response efforts.   
+
+The goal is to create analysis and visualizations about the characteristics of award amounts, award count, award sources, award recipients, award titles and so on.
+
+
+
+
+
+**Data Source**
+
+
+1. [HHS Covid-19 Awards](https://taggs.hhs.gov/Coronavirus)
+
+2. [Recipients of HHS](https://taggs.hhs.gov/SearchRecip)
+
+3. [Shapefile of US counties](https://www.census.gov/geographies/mapping-files/time-series/geo/carto-boundary-file.html)
+
+4. [Shapefile of countries](https://hub.arcgis.com/datasets/UIA::uia-world-countries-boundaries?selectedAttribute=Shape__Area)
+
+
+
+
+
+
+**Version**
+
+
+1. RStudio: 1.2.5033
+
+2. plotly: 4.9.2.1
+
+3. leaflet: 2.0.3
+
+4. wordcloud2: 0.2.1
+
+5. flexdashboard: 0.5.2
+
+6. networkD3: 0.4
+
+
+
+Geospatial Analysis
+=======================================================================
+
+Column{data-width=150}
+-----------------------------------------------------------------------
+
+### Total Award Amounts
+```{r}
+int=read_csv(file = 'data/int.csv')
+dem=read_csv(file = 'data/dem.csv')
+all=read_csv(file = 'data/all.csv')
+amount=sum(all$`Award Amount`)/1000000000
+value=paste0("$", formatC(as.numeric(amount), format="f", digits=2, big.mark=","),"B")
+valueBox(value, icon = "dollar-sign",color = '#eec4c4')
+
+
+```
+
+
+
+### Domestic Award Amounts
+```{r}
+articles <- round(sum(dem$`Award Amount`)/ sum(all$`Award Amount`)*100,1)
+gauge(articles, min = 0, max = 100, symbol = '%', gaugeSectors(
+  success = c(80, 100), warning = c(40, 79), danger = c(0, 39),colors = c("#e39c9c", rgb(0, 1, 0), "#CC664D")
+))
+
+```
+
+
+### Total Award Count
+```{r}
+count=nrow(all)
+valueBox(count,color = '#eec4c4')
+```
+
+### Domestic Award Count
+```{r}
+articles <- round(nrow(dem)/nrow(all)*100,1)
+gauge(articles, min = 0, max = 100, symbol = '%', gaugeSectors(
+  success = c(80, 100), warning = c(40, 79), danger = c(0, 39),colors = c("#e39c9c", rgb(0, 1, 0), "#CC664D")
+))
+```
+
+
+
+Column{.tabset}
+-----------------------------------------------------------------------
+### HHS Domestic Award
+
+```{r}
+dem=read_csv(file = 'data/dem.csv')
+geo<- read_sf("data/geo/cb_2018_us_state_20m.shp")
+df=dem %>% 
+    group_by(State) %>% 
+    dplyr::summarise(award_amount=sum(`Award Amount`)/1000000000,
+              award_num=n())
+names(df)=c("STUSPS","award_amount","award_num")
+geo<-merge(geo,df,by=c("STUSPS"))
+
+title <- tags$p(tags$style("p {color: gray; font-size:18px}"),
+            tags$b("HHS COVID-19 Awards in the USA"))
+
+popup_dat <- paste0("<strong>State: </strong>", 
+                    geo$NAME, 
+                    "<br><strong>Award amount (Billion): </strong>", 
+                     formatC(as.numeric(geo$award_amount), format="f", digits=3, big.mark=","),
+                    "<br><strong>Award count: </strong>", 
+                    geo$award_num
+                    )
+bins = c(0,0.1,0.3,0.5,1,2,2.5)
+pal <- colorBin("Reds", domain = geo$award_amount, bins = bins)
+
+
+map <- leaflet(data = geo,
+                   options = leafletOptions(
+            attributionControl=FALSE)) %>%
+  # Base groups
+  
+  addTiles()%>% 
+  setView(lng = -96, lat = 37.8, zoom = 3) %>% 
+  addPolygons(fillColor = ~pal(award_amount), 
+              fillOpacity = 0.6, 
+              color = "white", 
+              weight = 2,
+              popup = popup_dat,
+              dashArray = "3"
+              ) %>%
+  addLegend("bottomleft", pal = pal, values = ~award_amount,
+    title = "Award Amount (Billion)",
+    opacity = 1)%>%
+  addControl(title, position = "topright" )%>%
+  addProviderTiles(providers$CartoDB.Positron)
+map
+```
+
+
+### HHS International Award
+
+```{r}
+
+int=read_csv(file = 'data/int.csv')
+geo<- read_sf("data/geo/World_Countries__Generalized_.shp")
+geo=rmapshaper::ms_simplify(geo, keep = 0.01, keep_shapes = TRUE)
+
+df=int %>% 
+    group_by(Country_code_2) %>% 
+    dplyr::summarise(award_amount=sum(`Award Amount`),
+              award_num=n())
+names(df)=c("AFF_ISO","award_amount","award_num")
+geo=left_join(geo,df,c('AFF_ISO'))
+
+geo[is.na(geo)]<-0
+
+bins = c(1,50000,100000,1000000,5000000,10000000,30000000)
+pal <- colorBin("YlOrRd", domain = geo$award_amount, bins = bins)
+
+title <- tags$p(tags$style("p {color: gray; font-size:18px}"),
+            tags$b("HHS International COVID-19 Awards"))
+
+popup_dat <- paste0("<strong>State: </strong>", 
+                    geo$COUNTRY, 
+                    "<br><strong>Award amount: </strong>", 
+                    "$", formatC(as.numeric(geo$award_amount), format="f", digits=0, big.mark=","),
+                    "<br><strong>Award count: </strong>", 
+                    geo$award_num
+                    )
+title <- tags$p(tags$style("p {color: gray; font-size:18px}"),
+            tags$b("HHS International COVID-19 Awards"))
+
+map <- leaflet(data = geo,
+                   options = leafletOptions(
+            attributionControl=FALSE)) %>%
+  # Base groups
+  
+  addTiles()%>% 
+  setView(lng = -0, lat = 0, zoom = 1) %>% 
+  addPolygons(fillColor = ~pal(award_amount), 
+              fillOpacity = 0.6, 
+              color = "white", 
+              weight = 0.5,
+              popup = popup_dat,
+              dashArray = "3"
+              ) %>%
+  addLegend("bottomleft", pal = pal, values = ~award_amount,
+    title = "Award Amount ($)",
+    opacity = 1)%>%
+  addControl(title, position = "topright" )%>%
+  addProviderTiles(providers$CartoDB.Positron)
+map
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Source & Recipient 
+=======================================================================
+
+Column{data-width=225}
+-----------------------------------------------------------------------
+
+### Award Amounts by HHS Operating Division
+```{r}
+int=read_csv(file = 'data/int.csv')
+dem=read_csv(file = 'data/dem.csv')
+all=read_csv(file = 'data/all.csv')
+
+
+df=all %>% 
+    group_by(OPDIV) %>% 
+    summarise(award_amount=sum(`Award Amount`))
+
+
+
+#colors <- c("#8b2828","#dd8888","#f4d7d7","#8b7676")
+
+gradient <- colorRampPalette(c("#8b2828","#f4d7d7"))
+df$colors <- gradient(dim(df)[1])[as.numeric(cut(df$award_amount, breaks = dim(df)[1]))]
+
+fig=plot_ly(df, labels = ~OPDIV,
+            values = ~ award_amount, 
+            type = "pie",
+            hovertemplate = paste('%{label} <br>',
+                                  "Total Amount: %{value:$,.0f}<br>",
+                                  "Percent: %{percent}<br>"),
+            textinfo = 'label',
+            textposition = 'inside',
+            showlegend=FALSE,
+            marker = list(colors = ~colors,line = list(color = '#FFFFFF', width = 2))
+)
+fig <- fig %>% layout(uniformtext=list(minsize=8,mode='hide'),
+                      legend = list(orientation = "v",   # show entries horizontally
+                     xanchor = "center",  # use center of legend as anchor
+                     x = 0.9, 
+                     y=0,
+                     yanchor="center"),
+                     autosize=TRUE,
+                     # width=180,
+                     # height=200,
+                     margin=list(l=15,t=0,b=0)) 
+fig
+```
+
+
+### HHS Operating Division (Source)
+
+ <font size="2"> **ACF: **Administration for Children and Families </font>\
+ <font size="2"> **ACL: **Administration for Community Living </font>\
+ <font size="2"> **CDC: **Centers for Disease Control and Prevention </font>\
+ <font size="2"> **CMS: **Centers for Medicare & Medicaid Services </font>\
+ <font size="2"> **HRSA: **Health Resources and Services Administration </font>\
+ <font size="2"> **IHS: **Indian Health Service </font>\
+ <font size="2"> **NIH: **National Institutes of Health</font>\
+ <font size="2"> **SAMHSA: **Substance Abuse and Mental Health Services Administration</font>\
+ <font size="2"> **DHHS/OS: **Department of Health and Human Services/ Office of the Secretary </font>\
+
+Column
+-----------------------------------------------------------------------
+
+### Sources and Recipient Classes of HHS Domestic Awards  
+```{r}
+
+int=read_csv(file = 'data/int.csv')
+dem=read_csv(file = 'data/dem.csv')
+all=read_csv(file = 'data/all.csv')
+network_dem_class=dem %>% 
+    group_by(OPDIV,`Class`) %>% 
+    summarise(award_sum=sum(`Award Amount`))
+
+
+Sankeynodes<-data.frame(name=unique(c(network_dem_class$OPDIV,network_dem_class$Class)))
+Sankeynodes$index<-0:(nrow(Sankeynodes) - 1)
+Sankeylinks<-network_dem_class
+Sankeylinks<-merge(Sankeylinks,Sankeynodes,by.x="OPDIV",by.y="name")  
+Sankeylinks<-merge(Sankeylinks,Sankeynodes,by.x="Class",by.y="name")  
+
+Sankeydata<-Sankeylinks[,c(4,5,3)] 
+
+
+names(Sankeydata)<-c("Source","Target","Value") 
+Sankeydata=Sankeydata[order(Sankeydata$Source),]
+Sankeyname<-Sankeynodes[,1,drop=FALSE]  
+
+Sankeyname$group=as.factor(c("0","1","2","3","4","5","6","7","8",
+                             rep("9", times=14)))
+
+
+# Sankeydata$group=as.factor(c(rep("0", times=11),
+#                              rep("1", times=9),
+#                              rep("2", times=11),
+#                              rep("3", times=1),
+#                              rep("4", times=7),
+#                              rep("5", times=11),
+#                              rep("6", times=9),
+#                              rep("7", times=8),
+#                              rep("8", times=11)
+#                              ))
+
+#Sankeydata$group=as.factor(c(rep("10", times=78)))
+my_color <- 'd3.scaleOrdinal() .domain(["0","1","2","3","4","5","6","7","8","9"]) .range([\
+"#8b7676",\
+"#cc4d4d",\
+"#e8b0b0",\
+"#140606",\
+"#d16161",\
+"#c63939",\
+"#b23333",\
+"#8b2828",\
+"#631c1c",\
+"#f9ebeb"\
+])'
+ 
+sankey=sankeyNetwork(Links=Sankeydata,Nodes=Sankeyname, 
+                     Source ="Source",  
+                     Target = "Target", 
+                     Value = "Value", 
+                     NodeID = "name",
+                     fontSize = 10, 
+                     nodeWidth = 30,
+                     #width = 600,
+                     sinksRight = FALSE,
+                     colourScale=my_color,
+                     #LinkGroup="group",
+                     NodeGroup="group"
+                     )
+# sankey <- htmlwidgets::prependContent(sankey, htmltools::tags$p("Title"))
+sankey
+```
+
+
+### Sources and Recipient Classes of HHS International Awards 
+```{r}
+
+int=read_csv(file = 'data/int.csv')
+dem=read_csv(file = 'data/dem.csv')
+all=read_csv(file = 'data/all.csv')
+network_int_class=int %>% 
+    group_by(OPDIV,`Class`) %>% 
+    summarise(award_sum=sum(`Award Amount`))
+
+
+Sankeynodes<-data.frame(name=unique(c(network_int_class$OPDIV,network_int_class$Class)))
+Sankeynodes$index<-0:(nrow(Sankeynodes) - 1)
+Sankeylinks<-network_int_class
+Sankeylinks<-merge(Sankeylinks,Sankeynodes,by.x="OPDIV",by.y="name")  
+Sankeylinks<-merge(Sankeylinks,Sankeynodes,by.x="Class",by.y="name")  
+
+Sankeydata<-Sankeylinks[,c(4,5,3)] 
+
+
+names(Sankeydata)<-c("Source","Target","Value") 
+Sankeydata=Sankeydata[order(Sankeydata$Source),]
+Sankeyname<-Sankeynodes[,1,drop=FALSE]  
+
+Sankeyname$group=as.factor(c("1","2",rep("3", times=6)))
+Sankeydata$group=as.factor(c(rep("1", times=6),rep("2", times=2)))
+
+
+my_color <- 'd3.scaleOrdinal() .domain(["1", "2", "3"]) .range(["#e8b0b0", "#625151", "#f9ebeb"])'
+ 
+sankey=sankeyNetwork(Links=Sankeydata,Nodes=Sankeyname, 
+                     Source ="Source",  
+                     Target = "Target", 
+                     Value = "Value", 
+                     NodeID = "name",
+                     fontSize = 10, 
+                     nodeWidth = 30,
+                     #width = 500,
+                     sinksRight = FALSE,
+                     colourScale=my_color, 
+                #     LinkGroup="group", 
+                     NodeGroup="group")
+# sankey <- htmlwidgets::prependContent(sankey, htmltools::tags$p("Title"))
+sankey
+a=c("1",rep("2", times=5))
+a
+```
+
+
+
+
+
+
+
+
+Exploratory Analysis
+=======================================================================
+
+Column
+-----------------------------------------------------------------------
+### Top 5 Cumulative Award Amounts by HHS Operating Division
+```{r}
+int=read_csv(file = 'data/int.csv')
+dem=read_csv(file = 'data/dem.csv')
+all=read_csv(file = 'data/all.csv')
+
+
+all$`Action Date`=as.Date(all$`Action Date`,"%m/%d/%y")
+
+
+all=all[order(all$`Action Date`),]
+time=unique(all$`Action Date`)
+time=data.frame(time)
+names(time)=c("Action Date")
+
+all=all %>% 
+    group_by(OPDIV,`Action Date`) %>% 
+    summarise(`Award Amount`=sum(`Award Amount`))
+
+
+CDC=all[which(all$OPDIV %in% c("CDC")),]
+CDC=CDC[,-which(names(CDC) %in% c('OPDIV') )]
+names(CDC)=c("Action Date","CDC")
+
+ACF=all[which(all$OPDIV %in% c("ACF")),]
+ACF=ACF[,-which(names(ACF) %in% c('OPDIV') )]
+names(ACF)=c("Action Date","ACF")
+
+HRSA=all[which(all$OPDIV %in% c("HRSA")),]
+HRSA=HRSA[,-which(names(HRSA) %in% c('OPDIV') )]
+names(HRSA)=c("Action Date","HRSA")
+
+NIH=all[which(all$OPDIV %in% c("NIH")),]
+NIH=NIH[,-which(names(NIH) %in% c('OPDIV') )]
+names(NIH)=c("Action Date","NIH")
+
+ACL=all[which(all$OPDIV %in% c("ACL")),]
+ACL=ACL[,-which(names(ACL) %in% c('OPDIV') )]
+names(ACL)=c("Action Date","ACL")
+
+
+
+combine=left_join(time,CDC,by=c('Action Date'))
+combine=left_join(combine,ACF,by=c('Action Date'))
+combine=left_join(combine,HRSA,by=c('Action Date'))
+combine=left_join(combine,NIH,by=c('Action Date'))
+combine=left_join(combine,ACL,by=c('Action Date'))
+
+
+combine[is.na(combine)] <- 0
+combine$CDC=cumsum(combine$CDC)
+combine$ACF=cumsum(combine$ACF)
+combine$HRSA=cumsum(combine$HRSA)
+combine$NIH=cumsum(combine$NIH)
+combine$ACL=cumsum(combine$ACL)
+
+fig=plot_ly(data = combine,
+            x=~`Action Date`,
+            y=~CDC,
+            name = "CDC",
+            type = 'scatter', 
+            mode="none",
+            stackgroup = 'one',
+            #groupnorm = 'percent', 
+            fillcolor = '#f9ebeb')
+fig <- fig %>% add_trace(y = ~ACF, 
+                         name = 'ACF', 
+                         fillcolor = '#d77474')
+fig <- fig %>% add_trace(y = ~ACL, 
+                         name = 'ACL', 
+                         fillcolor = '#8b2828')
+fig <- fig %>% add_trace(y = ~HRSA, 
+                         name = 'HRSA', 
+                         fillcolor = '#4f1717')
+fig <- fig %>% add_trace(y = ~NIH, 
+                         name = 'NIH', 
+                         fillcolor = '#625151')
+
+fig <- fig %>% layout(xaxis = list(title="Date"), yaxis =list(title= "Cumulative Award Amount"))
+fig
+```
+
+
+Column
+-----------------------------------------------------------------------
+
+
+
+### Top Words in HHS Covid-19 Award Titles
+```{r}
+
+
+int=read_csv(file = 'data/int.csv')
+dem=read_csv(file = 'data/dem.csv')
+all=read_csv(file = 'data/all.csv')
+data2=paste(tolower(all$`Award Title`), collapse = " ")
+docs <- Corpus(VectorSource(data2))
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+docs <- tm_map(docs, toSpace, "/")
+docs <- tm_map(docs, toSpace, "@")
+docs <- tm_map(docs, toSpace, "\\|")
+docs <- tm_map(docs, toSpace, "\\(.*?\\)")
+# Convert the text to lower case
+docs <- tm_map(docs, content_transformer(tolower))
+# Remove numbers
+#docs <- tm_map(docs, removeNumbers)
+# Remove english common stopwords
+docs <- tm_map(docs, removeWords, stopwords("english"))
+# Remove your own stop word
+# specify your stopwords as a character vector
+docs <- tm_map(docs, removeWords, c("2020")) 
+# Remove punctuations
+docs <- tm_map(docs, removePunctuation)
+# Eliminate extra white spaces
+docs <- tm_map(docs, stripWhitespace)
+dtm <- TermDocumentMatrix(docs)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+
+
+# color <- colorRampPalette(brewer.pal(1:5,"Reds"))(50)
+# 
+# fanzhuan <- function(a,start,end)
+# {
+#   while(start < end)
+#   {
+#     temp = a[start]
+#     a[start] = a[end]
+#     a[end] = temp
+#     start = start + 1
+#     end = end - 1
+#   }
+#   return(a)
+# }
+# 
+# color=fanzhuan(color,1,length(color))
+
+color = ifelse(d[, 2] > 3500,  '#d16161', '#f4d7d7')
+fig=wordcloud2(d[1:30,], 
+           size = 0.3,
+           minSize = 0, 
+           gridSize =  0,
+           #fontFamily = "Britannic Bold",
+           fontWeight = 'bold',  
+           #color = 'random-dark', 
+           backgroundColor = "white",  
+           minRotation = -pi/2,
+           maxRotation = -pi/2,  
+           shape = 'cardioid', 
+           ellipticity = 0.5, 
+           widgetsize = NULL,
+           color=color
+           )  
+saveWidget(fig, '1.html', selfcontained = F)
+webshot('1.html', "1.png",vwidth=400,vheight=250)
+```
+
+
+![](1.png)
+
+### Top Words in Recipient Name of HHS Covid-19 Award 
+```{r}
+int=read_csv(file = 'data/int.csv')
+dem=read_csv(file = 'data/dem.csv')
+all=read_csv(file = 'data/all.csv')
+data2=paste(tolower(all$`Recipient Name`), collapse = " ")
+docs <- Corpus(VectorSource(data2))
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+docs <- tm_map(docs, toSpace, "/")
+docs <- tm_map(docs, toSpace, "@")
+docs <- tm_map(docs, toSpace, "\\|")
+docs <- tm_map(docs, toSpace, "\\(.*?\\)")
+# Convert the text to lower case
+docs <- tm_map(docs, content_transformer(tolower))
+# Remove numbers
+#docs <- tm_map(docs, removeNumbers)
+# Remove english common stopwords
+docs <- tm_map(docs, removeWords, stopwords("english"))
+# Remove your own stop word
+# specify your stopwords as a character vector
+docs <- tm_map(docs, removeWords, c("2020")) 
+# Remove punctuations
+docs <- tm_map(docs, removePunctuation)
+# Eliminate extra white spaces
+docs <- tm_map(docs, stripWhitespace)
+dtm <- TermDocumentMatrix(docs)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+
+# color <- colorRampPalette(brewer.pal(1:5,"Reds"))(50)
+# 
+# fanzhuan <- function(a,start,end)
+# {
+#   while(start < end)
+#   {
+#     temp = a[start]
+#     a[start] = a[end]
+#     a[end] = temp
+#     start = start + 1
+#     end = end - 1
+#   }
+#   return(a)
+# }
+# 
+# color=fanzhuan(color,1,length(color))
+
+color = ifelse(d[, 2] > 2800,  '#8b2828', ' #e8b0b0')
+fig=wordcloud2(d[1:30,], 
+           size = 0.6,
+           minSize = 0, 
+           gridSize =  0,
+           #fontFamily = "Britannic Bold",
+           fontWeight = 'bold',  
+           #color = 'random-dark', 
+           backgroundColor = "white",  
+           minRotation = -pi/2,
+           maxRotation = -pi/2,  
+           shape = 'cardioid', 
+           ellipticity = 0.5, 
+           widgetsize = NULL,
+           color=color
+           )  
+saveWidget(fig, '2.html', selfcontained = F)
+webshot('2.html', '2.png', vwidth=400,vheight=250, delay = 5)
+```
+
+![](2.png)
+
